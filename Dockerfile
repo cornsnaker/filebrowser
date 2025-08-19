@@ -1,45 +1,14 @@
-## Multistage build: Fetch dependencies
-FROM alpine:3.18 AS fetcher
+# Use the official File Browser Docker image
+FROM filebrowser/filebrowser:latest
 
-# Install dependencies and download JSON.sh
-RUN apk update && \
-    apk add --no-cache ca-certificates mailcap tini-static curl && \
-    curl -L -o /JSON.sh https://raw.githubusercontent.com/dominictarr/JSON.sh/0d5e5c77365f63809bf6e77ef44a1f34b0e05840/JSON.sh
+# Set environment variables
+ENV FILEBROWSER_DATABASE=/database/filebrowser.db \
+    FILEBROWSER_ROOT=/srv \
+    FILEBROWSER_PORT=8080 \
+    FILEBROWSER_NO_AUTH=true
 
-## Second stage: Lightweight runtime
-FROM busybox:1.37.0-musl
+# Expose the port
+EXPOSE 8080
 
-ENV UID=1000
-ENV GID=1000
-
-# Create non-root user
-RUN addgroup -g $GID user && \
-    adduser -D -u $UID -G user user
-
-# Copy binaries and scripts
-COPY --chown=user:user filebrowser /bin/filebrowser
-COPY --chown=user:user docker/common/ /
-COPY --chown=user:user docker/alpine/ /
-COPY --chown=user:user --from=fetcher /sbin/tini-static /bin/tini
-COPY --from=fetcher /JSON.sh /JSON.sh
-COPY --from=fetcher /etc/ca-certificates.conf /etc/ca-certificates.conf
-COPY --from=fetcher /etc/ca-certificates /etc/ca-certificates
-COPY --from=fetcher /etc/mime.types /etc/mime.types
-COPY --from=fetcher /etc/ssl /etc/ssl
-
-# Create directories and set ownership
-RUN mkdir -p /config /database /srv && \
-    chown -R user:user /config /database /srv && \
-    chmod +x /healthcheck.sh
-
-# Healthcheck
-HEALTHCHECK --start-period=2s --interval=5s --timeout=3s CMD /healthcheck.sh
-
-# Set user
-USER user
-
-# Expose port
-EXPOSE 80
-
-# ENTRYPOINT
-ENTRYPOINT [ "tini", "--", "/init.sh" ]
+# Start File Browser
+CMD ["/filebrowser", "server"]
